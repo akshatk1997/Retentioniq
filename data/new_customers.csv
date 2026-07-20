@@ -1,4 +1,13 @@
 customer_id,tenure_months,monthly_charges,total_charges,contract_type,internet_service,payment_method,region,support_tickets,payment_delays,product_usage,complaint_count,customer_satisfaction_score
-N001,8,78.5,628.0,Month-to-month,Fiber optic,Electronic check,North,6,4,26,5,1.6
-N002,40,62.0,2480.0,Two year,DSL,Bank transfer,South,1,0,88,1,4.6
-N003,15,84.0,1260.0,Month-to-month,Fiber optic,Credit card,West,5,2,35,3,2.0
+N001,8,78.5,628,Month-to-month,Fiber optic,Electronic check,North,6,4,26,5,1.6
+N002,40,62,2480,Two year,DSL,Bank transfer,South,1,0,88,1,4.6
+N003,15,84,1260,Month-to-month,Fiber optic,Credit card,West,5,2,35,3,2
+N001,8,78.5,628,Month-to-month,Fiber optic,Electronic check,North,6,4,26,5,1.6
+N002,40,62,2480,Two year,DSL,Bank transfer,South,1,0,88,1,4.6
+N003,15,84,1260,Month-to-month,Fiber optic,Credit card,West,5,2,35,3,2
+N001,8,78.5,628,Month-to-month,Fiber optic,Electronic check,North,6,4,26,5,1.6
+N002,40,62,2480,Two year,DSL,Bank transfer,South,1,0,88,1,4.6
+N003,15,84,1260,Month-to-month,Fiber optic,Credit card,West,5,2,35,3,2
+N001,8,78.5,628,Month-to-month,Fiber optic,Electronic check,North,6,4,26,5,1.6
+N002,40,62,2480,Two year,DSL,Bank transfer,South,1,0,88,1,4.6
+N003,15,84,1260,Month-to-month,Fiber optic,Credit card,West,5,2,35,3,2

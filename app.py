@@ -36,6 +36,11 @@ def get_db_path() -> Path:
                 shutil.copy2(base_db_path, writable_db_path)
             except Exception:
                 pass
+        if writable_db_path.exists():
+            try:
+                os.chmod(writable_db_path, 0o666)
+            except Exception:
+                pass
         return writable_db_path
 
     # Test if project directory is writable; fallback to temp dir if read-only
@@ -50,6 +55,11 @@ def get_db_path() -> Path:
         if not writable_db_path.exists() and base_db_path.exists():
             try:
                 shutil.copy2(base_db_path, writable_db_path)
+            except Exception:
+                pass
+        if writable_db_path.exists():
+            try:
+                os.chmod(writable_db_path, 0o666)
             except Exception:
                 pass
         return writable_db_path
@@ -75,7 +85,13 @@ def create_app() -> Flask:
         ensure_database(get_db_path(), SCHEMA_PATH, config=load_config(CONFIG_PATH))
 
     def get_connection() -> sqlite3.Connection:
-        conn = sqlite3.connect(get_db_path())
+        db_p = get_db_path()
+        if db_p.exists():
+            try:
+                os.chmod(db_p, 0o666)
+            except Exception:
+                pass
+        conn = sqlite3.connect(db_p)
         conn.row_factory = sqlite3.Row
         return conn
 

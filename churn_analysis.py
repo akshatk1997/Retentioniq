@@ -155,9 +155,19 @@ def generate_heuristic_target(frame: pd.DataFrame) -> pd.Series:
     return pd.Series(scores, dtype=int)
 
 
+def connect_db(db_path: Path | str) -> sqlite3.Connection:
+    p = Path(db_path)
+    if p.exists():
+        try:
+            os.chmod(p, 0o666)
+        except Exception:
+            pass
+    return sqlite3.connect(p)
+
+
 def ensure_database(db_path: Path, schema_path: Path, config: dict | None = None) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    conn = connect_db(db_path)
     with schema_path.open("r", encoding="utf-8") as handle:
         conn.executescript(handle.read())
 
@@ -368,7 +378,7 @@ def import_frame_to_sql(frame: pd.DataFrame, db_path: Path, replace: bool = Fals
     })
     is_arbitrary = churn_like < 3
 
-    conn = sqlite3.connect(db_path)
+    conn = connect_db(db_path)
     
     # Generate unique source_id
     source_id = "src_" + datetime.now().strftime("%Y%m%d%H%M%S") + "_" + str(hash(filename) % 10000)
@@ -425,7 +435,7 @@ def import_csv_to_sql(csv_path: Path, db_path: Path, replace: bool = False, conf
 
 
 def load_training_data(db_path: Path, config: dict | None = None) -> pd.DataFrame:
-    conn = sqlite3.connect(db_path)
+    conn = connect_db(db_path)
     query = """
         SELECT cc.* 
         FROM customer_churn cc
@@ -497,7 +507,7 @@ def train_model(db_path: Path, model_path: Path, config: dict | None = None) -> 
     config = config or load_config()
     df = load_training_data(db_path, config)
     if df.empty:
-        conn = sqlite3.connect(db_path)
+        conn = connect_db(db_path)
         conn.execute("DELETE FROM churn_predictions")
         conn.commit()
         conn.close()
@@ -566,7 +576,7 @@ def train_model(db_path: Path, model_path: Path, config: dict | None = None) -> 
 
 
 def save_predictions_to_sql(db_path: Path, prediction_frame: pd.DataFrame) -> None:
-    conn = sqlite3.connect(db_path)
+    conn = connect_db(db_path)
     active_source_ids = conn.execute("SELECT source_id FROM data_sources WHERE is_active = 1").fetchall()
     active_ids = [r[0] for r in active_source_ids]
     if active_ids:
@@ -634,7 +644,7 @@ def predict_from_csv(csv_path: Path, db_path: Path, model_path: Path, save_to_sq
 
 def build_business_summary(db_path: Path, config: dict | None = None) -> dict:
     config = config or load_config()
-    conn = sqlite3.connect(db_path)
+    conn = connect_db(db_path)
     summary = pd.read_sql_query(
         """
         SELECT cp.prediction_label, COUNT(*) AS customers, ROUND(AVG(cp.predicted_probability), 3) AS avg_probability
@@ -935,7 +945,7 @@ def get_database_context_summary(db_path: Path) -> str:
         return "Database file does not exist. No customer data has been loaded yet."
     
     try:
-        conn = sqlite3.connect(db_path)
+        conn = connect_db(db_path)
         conn.row_factory = sqlite3.Row
         
         # Count customers in active sources
