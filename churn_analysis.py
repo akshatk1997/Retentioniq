@@ -407,22 +407,25 @@ def import_frame_to_sql(frame: pd.DataFrame, db_path: Path, replace: bool = Fals
         (source_id, filename, len(normalized), datetime.now().isoformat())
     )
 
+    db_cols = {row[1] for row in conn.execute("PRAGMA table_info(customer_churn)").fetchall()}
     existing_ids = {row[0] for row in conn.execute("SELECT customer_id FROM customer_churn").fetchall()}
     new_rows = normalized[~normalized["customer_id"].isin(existing_ids)]
     if not new_rows.empty:
-        new_rows.to_sql("customer_churn", conn, if_exists="append", index=False)
+        valid_cols = [c for c in new_rows.columns if c in db_cols]
+        new_rows[valid_cols].to_sql("customer_churn", conn, if_exists="append", index=False)
     else:
         for _, row in normalized.iterrows():
             if row["customer_id"] in existing_ids:
                 updates = []
                 values = []
                 for column in normalized.columns:
-                    if column == "customer_id":
+                    if column == "customer_id" or column not in db_cols:
                         continue
                     updates.append(f'"{column}" = ?')
                     values.append(row[column])
-                values.append(row["customer_id"])
-                conn.execute(f'UPDATE customer_churn SET {", ".join(updates)} WHERE customer_id = ?', values)
+                if updates:
+                    values.append(row["customer_id"])
+                    conn.execute(f'UPDATE customer_churn SET {", ".join(updates)} WHERE customer_id = ?', values)
 
     conn.commit()
     conn.close()
@@ -545,9 +548,12 @@ def train_model(db_path: Path, model_path: Path, config: dict | None = None) -> 
         accuracy = accuracy_score(y_test, predictions)
         report_text = classification_report(y_test, predictions, zero_division=0)
 
-    model_path.parent.mkdir(parents=True, exist_ok=True)
-    with model_path.open("wb") as handle:
-        pickle.dump(model, handle)
+    try:
+        model_path.parent.mkdir(parents=True, exist_ok=True)
+        with model_path.open("wb") as handle:
+            pickle.dump(model, handle)
+    except (PermissionError, OSError):
+        pass
 
     proba = model.predict_proba(df[feature_columns])
     if proba.shape[1] == 2:

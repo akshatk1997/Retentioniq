@@ -196,6 +196,8 @@ def create_app() -> Flask:
             rows = import_frame_to_sql(frame, get_db_path(), replace=False, config=config, filename=uploaded.filename)
             train_model(get_db_path(), get_model_path(), config=config)
         except Exception as exc:
+            import traceback
+            traceback.print_exc()
             return jsonify({"status": "error", "message": f"Analysis failed: {exc}"}), 400
 
         return jsonify({"status": "ok", "rows": rows, "filename": uploaded.filename})
