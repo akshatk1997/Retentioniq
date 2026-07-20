@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RetentionIQ — Churn Intelligence Studio</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+    <link rel="stylesheet" href="/static/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbarLeft">
+            <div class="logoBox" aria-label="RetentionIQ logo">
+                <svg class="logoSvg" viewBox="0 0 48 48" width="34" height="34" role="img">
+                    <defs>
+                        <linearGradient id="logoGrad" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stop-color="#db2777" />
+                            <stop offset="100%" stop-color="#6366f1" />
+                        </linearGradient>
+                    </defs>
+                    <rect class="logoTile" x="2" y="2" width="44" height="44" rx="13" fill="url(#logoGrad)" />
+                    <text id="logoChar" class="logoChar" x="24" y="31" text-anchor="middle" fill="#fff" font-size="22" font-weight="800" font-family="'Google Sans', Arial, sans-serif">R</text>
+                    <circle class="logoDot" cx="36" cy="36" r="4" fill="#fff" />
+                </svg>
+            </div>
+            <div class="topbarTitle">
+                <span class="appName" id="brandTitle">RetentionIQ</span>
+                <span class="appSub">Churn Intelligence Studio</span>
+            </div>
+        </div>
+        <div class="topbarRight">
+            <input id="companyNameInput" type="text" placeholder="Company name (optional)" autocomplete="off" />
+            <button id="exportTableauBtn" class="ghostBtn" type="button">Tableau</button>
+            <button id="exportPowerBiBtn" class="ghostBtn" type="button">Power BI</button>
+            <button id="exportPdfBtn" class="ghostBtn" type="button">PDF</button>
+            <button id="exportExcelBtn" class="ghostBtn" type="button">Excel</button>
+        </div>
+    </header>
+
+    <main class="studio">
+        <aside class="sourcesPane">
+            <div class="paneHead">
+                <h2>Sources</h2>
+                <button id="addSourceBtn" class="ghostBtn" type="button">+ Add</button>
+                <input id="fileInput" type="file" accept=".csv,text/csv,.xlsx,.json" hidden />
+            </div>
+
+            <p id="uploadStatus" class="status">Ready to analyze company data.</p>
+
+            <div class="sourcesList" id="sourcesList">
+                <!-- Sources will be rendered dynamically -->
+            </div>
+
+            <div class="sourceMeta">
+                <div class="sourceMetaRow"><span>Customers</span><strong id="metaTotal">—</strong></div>
+                <div class="sourceMetaRow"><span>High risk</span><strong id="metaHigh" class="danger">—</strong></div>
+                <div class="sourceMetaRow"><span>Low risk</span><strong id="metaLow" class="success">—</strong></div>
+                <div class="sourceMetaRow"><span>Fields</span><strong id="metaFields">—</strong></div>
+            </div>
+
+            <div class="chartBlock">
+                <h3>Risk distribution</h3>
+                <div class="chartArea">
+                    <canvas id="riskChart"></canvas>
+                </div>
+            </div>
+        </aside>
+
+        <section class="studioPane">
+            <div class="studioTabs">
+                <button class="tab active" data-tab="overview" type="button">Overview</button>
+                <button class="tab" data-tab="actions" type="button">Recommended Actions</button>
+                <button class="tab" data-tab="customers" type="button">Customers</button>
+                <button class="tab" data-tab="business" type="button">Business Hub</button>
+                <button class="tab" data-tab="presentation" type="button">Presentation</button>
+                <button class="tab" data-tab="copilot" type="button">Show AI</button>
+            </div>
+
+            <div class="tabBody" id="tab-overview">
+                <div class="aiCard">
+                    <div class="aiCardHead">
+                        <div class="aiBadge">AI</div>
+                        <div>
+                            <h2 id="aiHeadline">Awaiting analysis</h2>
+                            <p class="aiSub">Generated read of your churn risk</p>
+                        </div>
+                    </div>
+                    <p id="aiNarrative" class="aiNarrative">Upload a customer file to generate an AI retention narrative.</p>
+                    <div class="aiSegments" id="aiSegments"></div>
+                </div>
+
+                <div class="signalsBlock">
+                    <h3>Retention signals</h3>
+                    <div class="chartArea tall">
+                        <canvas id="signalChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tabBody hidden" id="tab-actions">
+                <div class="paneHead">
+                    <h2>Recommended Actions</h2>
+                    <select id="roleSelect" class="roleSelect" aria-label="View insights as role">
+                        <option value="manager">Manager</option>
+                        <option value="sales">Sales</option>
+                        <option value="support">Support</option>
+                        <option value="executive">Executive</option>
+                    </select>
+                </div>
+                <div id="insightPanel" class="insightBox"></div>
+                <div id="executiveSummary" class="executiveSummary"></div>
+            </div>
+
+            <div class="tabBody hidden" id="tab-customers">
+                <div class="paneHead">
+                    <h2>Prediction Results</h2>
+                    <select id="riskFilter" class="roleSelect" aria-label="Filter by risk">
+                        <option value="all">All risks</option>
+                        <option value="high_risk">High risk</option>
+                        <option value="low_risk">Low risk</option>
+                    </select>
+                </div>
+                <div class="tableWrap">
+                    <table id="predictionTable">
+                        <tbody id="predictionRows"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="tabBody hidden" id="tab-business">
+                <div class="businessHubLayout">
+                    <div class="businessHubHeader">
+                        <h2>Business Retention Intelligence</h2>
+                        <div class="currencySelector">
+                            <label for="currencySelect">Currency: </label>
+                            <select id="currencySelect" class="roleSelect" aria-label="Change currency">
+                                <option value="USD" data-symbol="$" data-rate="1.0">USD ($)</option>
+                                <option value="EUR" data-symbol="€" data-rate="0.92">EUR (€)</option>
+                                <option value="GBP" data-symbol="£" data-rate="0.78">GBP (£)</option>
+                                <option value="INR" data-symbol="₹" data-rate="83.5">INR (₹)</option>
+                                <option value="JPY" data-symbol="¥" data-rate="158.0">JPY (¥)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="financialStatsGrid">
+                        <div class="fStatCard">
+                            <span>Total Monthly Charges</span>
+                            <h3 id="bizTotalCharges">—</h3>
+                            <p class="fStatSub">Total active contract value</p>
+                        </div>
+                        <div class="fStatCard danger">
+                            <span>Expected Monthly Loss</span>
+                            <h3 id="bizExpectedLoss">—</h3>
+                            <p class="fStatSub">Loss weighted by churn risk</p>
+                        </div>
+                        <div class="fStatCard warning">
+                            <span>Risk Exposure</span>
+                            <h3 id="bizRiskExposurePct">—</h3>
+                            <p class="fStatSub">Percentage of value at risk</p>
+                        </div>
+                    </div>
+
+                    <div class="campaignSimulator">
+                        <div class="simHeader">
+                            <h3>Retention Campaign ROI Simulator</h3>
+                            <div class="roiBadge" id="simRoiBadge">ROI: 0%</div>
+                        </div>
+                        <p class="simDesc">Forecast the cost and saved revenue of a targeted retention campaign. Adjust variables in real-time:</p>
+                        
+                        <div class="simControlsGrid">
+                            <div class="simControlGroup">
+                                <label for="simRiskThreshold">Target Risk Threshold: <strong id="valRiskThreshold">60%</strong></label>
+                                <input type="range" id="simRiskThreshold" min="20" max="95" value="60" step="5" />
+                                <span class="sliderHelp">Target only accounts with risk >= threshold</span>
+                            </div>
+                            <div class="simControlGroup">
+                                <label for="simDiscount">Monthly Discount Offered: <strong id="valDiscount">20%</strong></label>
+                                <input type="range" id="simDiscount" min="5" max="50" value="20" step="5" />
+                                <span class="sliderHelp">Discount on monthly charge to incentivize retention</span>
+                            </div>
+                            <div class="simControlGroup">
+                                <label for="simSuccessRate">Expected Success Rate: <strong id="valSuccessRate">40%</strong></label>
+                                <input type="range" id="simSuccessRate" min="5" max="95" value="40" step="5" />
+                                <span class="sliderHelp">Estimated percent of targeted accounts that accept & stay</span>
+                            </div>
+                        </div>
+
+                        <div class="simResultsGrid">
+                            <div class="simResultCard">
+                                <span>Targeted Accounts</span>
+                                <h4 id="simTargetedCount">—</h4>
+                            </div>
+                            <div class="simResultCard">
+                                <span>Monthly Campaign Cost</span>
+                                <h4 id="simCampaignCost">—</h4>
+                            </div>
+                            <div class="simResultCard success">
+                                <span>Expected Saved Revenue</span>
+                                <h4 id="simSavedRevenue">—</h4>
+                            </div>
+                            <div class="simResultCard success highlight">
+                                <span>Net Saved Revenue</span>
+                                <h4 id="simNetSavedRevenue">—</h4>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="segmentRankings">
+                        <h3>Segment Loss Risk Ranking</h3>
+                        <p class="sectionSub">High-risk customer segments sorted by expected financial loss. Focus outreach here.</p>
+                        <div class="tableWrap">
+                            <table class="rankingTable">
+                                <thead>
+                                    <tr>
+                                        <th>Segment Dimension</th>
+                                        <th>Segment Value</th>
+                                        <th>Active Accounts</th>
+                                        <th>Avg Risk</th>
+                                        <th>Expected Monthly Loss</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="bizSegmentRows">
+                                    <tr>
+                                        <td colspan="5" class="empty">Awaiting database analysis...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tabBody hidden" id="tab-copilot">
+                <div class="paneHead">
+                    <h2>Show AI Agent</h2>
+                    <div class="apiKeyWrapper">
+                        <input id="geminiApiKeyInput" type="password" placeholder="Paste Show AI Model Key (Optional)..." autocomplete="off" />
+                    </div>
+                </div>
+                <div class="copilotBox">
+                    <div id="chatMessages" class="chatMessages">
+                        <div class="msg bot">
+                            <p>Hello! I am <strong>Show AI</strong>. I have access to your database details, prediction summaries, and retention records. Ask me any analysis or business queries, such as:</p>
+                            <ul>
+                                <li>"What are the top 3 contract types linked to churn?"</li>
+                                <li>"Draft a personalized recovery email for client C001."</li>
+                                <li>"Give me a breakdown of the monthly charges for high-risk customers."</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="chatSuggestionChips" id="suggestionChips">
+                        <button class="chip" type="button">Show top churn risks</button>
+                        <button class="chip" type="button">Compare regions by risk</button>
+                        <button class="chip" type="button">Retention advice for support-ticket heavy accounts</button>
+                    </div>
+                    <form id="chatForm" class="chatForm" autocomplete="off">
+                        <input id="chatInput" type="text" placeholder="Ask a business or analysis query..." required />
+                        <button id="chatSendButton" type="submit" class="primaryBtn">Send</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="tabBody hidden" id="tab-presentation">
+                <div class="presentationHub">
+                    <div class="presentationToolbar">
+                        <button id="generatePresBtn" class="primaryBtn">Generate Deck</button>
+                        <div class="presActionButtons">
+                            <button id="fullscreenPresBtn" class="ghostBtn hidden">Present Fullscreen</button>
+                            <button id="downloadPresBtn" class="ghostBtn hidden">Download HTML Presentation</button>
+                        </div>
+                    </div>
+                    
+                    <div class="deckStatus" id="deckStatus">Click "Generate Deck" to compile your churn intelligence presentation.</div>
+
+                    <div class="presContainer">
+                        <div id="slideViewport" class="slideViewport hidden">
+                            <!-- Slides will be rendered here dynamically -->
+                        </div>
+                        <button id="prevSlideBtn" class="navSlideBtn prev hidden" aria-label="Previous slide">&lsaquo;</button>
+                        <button id="nextSlideBtn" class="navSlideBtn next hidden" aria-label="Next slide">&rsaquo;</button>
+                    </div>
+
+                    <div class="presIndicator" id="presIndicator"></div>
+
+                    <!-- Presentation Q&A Section -->
+                    <div class="presQABlock">
+                        <h3>Quick Presentation Q&A Cards</h3>
+                        <p class="sectionSub">Instantly generate slide Q&A cards to address typical board meeting queries.</p>
+                        <div class="qaChips">
+                            <button class="chip qa-btn" type="button" data-question="What is our total monthly revenue at risk?">💰 Revenue Exposure</button>
+                            <button class="chip qa-btn" type="button" data-question="Draft an executive board summary.">📋 Executive Summary</button>
+                            <button class="chip qa-btn" type="button" data-question="What is the main contract driver of churn?">🔑 Drivers Analysis</button>
+                        </div>
+                        <div id="qaResponseBox" class="qaResponseBox hidden">
+                            <!-- Q&A answer slide will render here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <aside class="notesPane" id="notesPane">
+            <div class="paneHead">
+                <h2>Notes</h2>
+                <button id="createNoteBtn" class="ghostBtn" type="button">+</button>
+            </div>
+            <div class="notesList" id="notesList">
+                <!-- Saved notes will go here -->
+            </div>
+        </aside>
+    </main>
+
+    <footer class="siteFooter">
+        <span>RetentionIQ — AI-powered customer retention intelligence.</span>
+        <span class="madeByText">Built by Akshat Kumar</span>
+    </footer>
+
+    <script src="/static/app.js" defer></script>
+</body>
+</html>
