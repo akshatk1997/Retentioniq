@@ -148,6 +148,11 @@ a { color: inherit; text-decoration: none; }
     align-self: start;
     position: sticky;
     top: 82px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.sourcesPane.dragHighlight {
+    border-color: var(--accent);
+    box-shadow: 0 0 24px var(--accent);
 }
 
 .uploadCard {

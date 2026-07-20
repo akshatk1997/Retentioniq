@@ -5,6 +5,7 @@ import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
+import time
 
 import pandas as pd
 from sklearn.compose import ColumnTransformer
@@ -202,7 +203,12 @@ def ensure_database(db_path: Path, schema_path: Path, config: dict | None = None
     conn.close()
 
     if pred_count == 0 and cust_count > 0:
-        model_path = db_path.parent / "artifacts" / "churn_model.pkl"
+        artifacts_dir = db_path.parent / "artifacts"
+        try:
+            artifacts_dir.mkdir(parents=True, exist_ok=True)
+            model_path = artifacts_dir / "churn_model.pkl"
+        except (PermissionError, OSError):
+            model_path = db_path.parent / "churn_model.pkl"
         train_model(db_path, model_path, config=config)
 
 
@@ -257,7 +263,8 @@ def normalize_customer_frame(df: pd.DataFrame, include_target: bool = True, conf
         elif "customer_id" in normalized.columns:
             normalized["customer_id"] = normalized["customer_id"].astype(str)
         else:
-            normalized["customer_id"] = [f"C{i:03d}" for i in range(1, len(normalized) + 1)]
+            ts = int(time.time() * 1000) % 100000
+            normalized["customer_id"] = [f"C{ts}_{i:03d}" for i in range(1, len(normalized) + 1)]
 
         if include_target:
             inferred = infer_target_column(normalized, config=config)
@@ -271,7 +278,8 @@ def normalize_customer_frame(df: pd.DataFrame, include_target: bool = True, conf
     required_columns = list(config.get("required_columns", []) + [target_column])
 
     if "customer_id" not in normalized.columns:
-        normalized["customer_id"] = [f"C{i:03d}" for i in range(1, len(normalized) + 1)]
+        ts = int(time.time() * 1000) % 100000
+        normalized["customer_id"] = [f"C{ts}_{i:03d}" for i in range(1, len(normalized) + 1)]
 
     aliases = build_column_aliases(config)
     for column in required_columns:
@@ -488,6 +496,18 @@ def build_model(config: dict | None = None, fallback: bool = False, feature_colu
 def train_model(db_path: Path, model_path: Path, config: dict | None = None) -> dict:
     config = config or load_config()
     df = load_training_data(db_path, config)
+    if df.empty:
+        conn = sqlite3.connect(db_path)
+        conn.execute("DELETE FROM churn_predictions")
+        conn.commit()
+        conn.close()
+        return {
+            "accuracy": 0.0,
+            "report": "No active data available",
+            "rows": 0,
+            "model_path": str(model_path),
+        }
+
     target_column = config.get("target_column", DEFAULT_TARGET)
     if target_column not in df.columns:
         raise ValueError(f"Training data must include a {target_column} column")

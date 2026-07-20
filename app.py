@@ -1,4 +1,6 @@
 import os
+import shutil
+import tempfile
 import sqlite3
 from io import BytesIO
 from pathlib import Path
@@ -14,12 +16,55 @@ from churn_analysis import (ensure_database, import_frame_to_sql, load_config, p
 BASE_DIR = Path(__file__).resolve().parent
 SCHEMA_PATH = BASE_DIR / "sql" / "schema.sql"
 CONFIG_PATH = BASE_DIR / "config" / "company_config.json"
-MODEL_PATH = BASE_DIR / "artifacts" / "churn_model.pkl"
 
 
 def get_db_path() -> Path:
-    """Resolve the database path per call so env overrides (e.g. in tests) apply."""
-    return Path(os.environ.get("CHURN_DB", BASE_DIR / "churn_analysis.db"))
+    """Resolve the database path per call, supporting Vercel serverless & read-only filesystems."""
+    if "CHURN_DB" in os.environ:
+        return Path(os.environ["CHURN_DB"])
+
+    base_db_path = BASE_DIR / "churn_analysis.db"
+    
+    # Detect Vercel / AWS Lambda / Serverless read-only environments
+    is_serverless = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+    
+    if is_serverless:
+        writable_dir = Path("/tmp") if os.name != "nt" else Path(tempfile.gettempdir())
+        writable_db_path = writable_dir / "churn_analysis.db"
+        if not writable_db_path.exists() and base_db_path.exists():
+            try:
+                shutil.copy2(base_db_path, writable_db_path)
+            except Exception:
+                pass
+        return writable_db_path
+
+    # Test if project directory is writable; fallback to temp dir if read-only
+    try:
+        test_file = BASE_DIR / ".writable_test"
+        test_file.touch()
+        test_file.unlink()
+        return base_db_path
+    except (PermissionError, OSError):
+        writable_dir = Path("/tmp") if os.name != "nt" else Path(tempfile.gettempdir())
+        writable_db_path = writable_dir / "churn_analysis.db"
+        if not writable_db_path.exists() and base_db_path.exists():
+            try:
+                shutil.copy2(base_db_path, writable_db_path)
+            except Exception:
+                pass
+        return writable_db_path
+
+
+def get_model_path() -> Path:
+    if "CHURN_MODEL" in os.environ:
+        return Path(os.environ["CHURN_MODEL"])
+    db_dir = get_db_path().parent
+    artifacts_dir = db_dir / "artifacts"
+    try:
+        artifacts_dir.mkdir(parents=True, exist_ok=True)
+        return artifacts_dir / "churn_model.pkl"
+    except (PermissionError, OSError):
+        return db_dir / "churn_model.pkl"
 
 
 def create_app() -> Flask:
@@ -133,7 +178,7 @@ def create_app() -> Flask:
 
         try:
             rows = import_frame_to_sql(frame, get_db_path(), replace=False, config=config, filename=uploaded.filename)
-            train_model(get_db_path(), MODEL_PATH, config=config)
+            train_model(get_db_path(), get_model_path(), config=config)
         except Exception as exc:
             return jsonify({"status": "error", "message": f"Analysis failed: {exc}"}), 400
 
@@ -312,7 +357,7 @@ def create_app() -> Flask:
                 db_context = get_database_context_summary(get_db_path())
 
                 system_instruction = (
-                    "You are 'Show AI', a professional Senior Managing Consultant, Principal Data Scientist, and human customer retention expert. "
+                    "You are '@ AI', a professional Senior Managing Consultant, Principal Data Scientist, and human customer retention expert. "
                     "You speak to the user with high respect, professional courtesy, and strategic clarity. "
                     "Avoid robotic AI boilerplate (such as 'as an AI', 'sure here is', 'I do not have feelings', etc.). "
                     "Address the user directly as a colleague or executive client. "
@@ -379,7 +424,7 @@ def create_app() -> Flask:
             ollama_url = "http://localhost:11434/api/generate"
             payload = {
                 "model": "llama3.2",
-                "prompt": f"You are Show AI, a Lead Data Scientist. Treat the query professionally. Answer this: {user_message}",
+                "prompt": f"You are @ AI, a Lead Data Scientist. Treat the query professionally. Answer this: {user_message}",
                 "stream": False
             }
             req = urllib.request.Request(
@@ -663,7 +708,7 @@ def create_app() -> Flask:
         conn.close()
 
         try:
-            train_model(get_db_path(), MODEL_PATH, config=load_config(CONFIG_PATH))
+            train_model(get_db_path(), get_model_path(), config=load_config(CONFIG_PATH))
         except Exception:
             pass
 
@@ -672,13 +717,14 @@ def create_app() -> Flask:
     @app.route("/api/sources/<source_id>", methods=["DELETE"])
     def delete_source(source_id):
         conn = get_connection()
-        conn.execute("DELETE FROM data_sources WHERE source_id = ?", (source_id,))
+        conn.execute("DELETE FROM churn_predictions WHERE customer_id IN (SELECT customer_id FROM customer_churn WHERE source_id = ?)", (source_id,))
         conn.execute("DELETE FROM customer_churn WHERE source_id = ?", (source_id,))
+        conn.execute("DELETE FROM data_sources WHERE source_id = ?", (source_id,))
         conn.commit()
         conn.close()
 
         try:
-            train_model(get_db_path(), MODEL_PATH, config=load_config(CONFIG_PATH))
+            train_model(get_db_path(), get_model_path(), config=load_config(CONFIG_PATH))
         except Exception:
             pass
 
@@ -948,7 +994,7 @@ def create_app() -> Flask:
                 "layout": "journey_workflow",
                 "title": "Interactive Retention Roadmap",
                 "steps": [
-                    {"title": "Identify Risk", "description": "Show AI scans accounts for predictive churn metrics."},
+                    {"title": "Identify Risk", "description": "@ AI scans accounts for predictive churn metrics."},
                     {"title": "Design Action", "description": "Formulate billing recovery & proactive support incentives."},
                     {"title": "Execute Offer", "description": "Managers initiate outreach using pre-compiled templates."},
                     {"title": "Secure ARR", "description": "Contracts successfully extended; customer retention maximized."}

@@ -6,7 +6,7 @@ let labelMapping = { high_risk: 'high_risk', low_risk: 'low_risk' };
 async function loadDashboard() {
     try {
         const role = document.getElementById('roleSelect').value;
-        const apiKey = localStorage.getItem('show_ai_model_key') || '';
+        const apiKey = localStorage.getItem('at_ai_model_key') || localStorage.getItem('show_ai_model_key') || '';
         const [summaryRes, predictionRes, chartsRes, insightsRes, aiRes, brandingRes] = await Promise.all([
             fetch('/api/summary'),
             fetch('/api/predictions'),
@@ -208,38 +208,84 @@ function renderInsights(insightsData) {
         : '<p>No insights available yet.</p>';
 }
 
-async function uploadFile() {
+async function uploadFile(fileOverride) {
     const fileInput = document.getElementById('fileInput');
     const status = document.getElementById('uploadStatus');
 
-    if (!fileInput.files.length) {
-        status.textContent = 'Please choose a file first.';
-        status.className = 'status error';
+    const file = fileOverride instanceof File ? fileOverride : (fileInput && fileInput.files[0]);
+
+    if (!file) {
+        if (status) {
+            status.textContent = 'Please choose a file first.';
+            status.className = 'status error';
+        }
         return;
     }
 
     const formData = new FormData();
-    formData.append('file', fileInput.files[0]);
+    formData.append('file', file);
 
-    status.textContent = 'Uploading and analyzing...';
-    status.className = 'status';
+    if (status) {
+        status.textContent = `Uploading "${file.name}"...`;
+        status.className = 'status';
+    }
 
     try {
         const response = await fetch('/api/upload', { method: 'POST', body: formData });
         const payload = await response.json();
         if (response.ok && payload.status === 'ok') {
-            status.textContent = `Analysis complete: ${payload.rows} rows processed.`;
-            status.className = 'status success';
+            if (status) {
+                status.textContent = `Source added: ${payload.rows} customer records analyzed.`;
+                status.className = 'status success';
+            }
             await loadDashboard();
             await fetchSources();
         } else {
-            status.textContent = payload.message || 'Upload failed. Please try again.';
-            status.className = 'status error';
+            if (status) {
+                status.textContent = payload.message || 'Upload failed. Please try again.';
+                status.className = 'status error';
+            }
         }
     } catch (error) {
-        status.textContent = 'Upload failed. Please try again.';
-        status.className = 'status error';
+        if (status) {
+            status.textContent = 'Upload failed. Please check connection.';
+            status.className = 'status error';
+        }
+    } finally {
+        if (fileInput) fileInput.value = '';
     }
+}
+
+function setupDragAndDrop() {
+    const pane = document.querySelector('.sourcesPane');
+    if (!pane) return;
+
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        pane.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        }, false);
+    });
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        pane.addEventListener(eventName, () => {
+            pane.classList.add('dragHighlight');
+        }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        pane.addEventListener(eventName, () => {
+            pane.classList.remove('dragHighlight');
+        }, false);
+    });
+
+    pane.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        if (files && files.length) {
+            uploadFile(files[0]);
+        }
+    }, false);
 }
 
 function setupTabs() {
@@ -256,7 +302,8 @@ function setupTabs() {
 document.getElementById('addSourceBtn').addEventListener('click', () => {
     document.getElementById('fileInput').click();
 });
-document.getElementById('fileInput').addEventListener('change', uploadFile);
+document.getElementById('fileInput').addEventListener('change', () => uploadFile());
+setupDragAndDrop();
 document.getElementById('riskFilter').addEventListener('change', renderRows);
 document.getElementById('roleSelect').addEventListener('change', loadDashboard);
 document.getElementById('exportTableauBtn').addEventListener('click', () => {
@@ -312,12 +359,12 @@ loadDashboard();
 let chatHistory = [];
 
 function setupCopilot() {
-    const storedKey = localStorage.getItem('show_ai_model_key') || '';
+    const storedKey = localStorage.getItem('at_ai_model_key') || localStorage.getItem('show_ai_model_key') || '';
     const keyInput = document.getElementById('geminiApiKeyInput');
     if (keyInput) {
         keyInput.value = storedKey;
         keyInput.addEventListener('input', (e) => {
-            localStorage.setItem('show_ai_model_key', e.target.value.trim());
+            localStorage.setItem('at_ai_model_key', e.target.value.trim());
             loadDashboard();
         });
     }
@@ -366,7 +413,7 @@ async function handleChatMessage(event) {
     const loadingId = appendMessage('bot', 'Thinking...');
 
     try {
-        const apiKey = localStorage.getItem('show_ai_model_key') || '';
+        const apiKey = localStorage.getItem('at_ai_model_key') || localStorage.getItem('show_ai_model_key') || '';
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -444,7 +491,7 @@ function renderSourcesList(sources) {
     const container = document.getElementById('sourcesList');
     if (!container) return;
     if (!sources.length) {
-        container.innerHTML = '<p class="emptyHint">No source documents loaded yet. Click + Add to begin.</p>';
+        container.innerHTML = '<p class="emptyHint" onclick="document.getElementById(\'fileInput\').click()" style="cursor:pointer;" title="Click to upload customer file">No source documents loaded yet. <span style="color:var(--accent-2); text-decoration:underline;">Click + Add or drop file</span> to begin.</p>';
         return;
     }
     
@@ -459,7 +506,7 @@ function renderSourcesList(sources) {
                 </div>
                 <div class="sourceItemRight">
                     <span class="sourceRows">${src.row_count} rows</span>
-                    <button class="deleteSourceBtn" onclick="deleteSource('${src.source_id}')" title="Delete source">&times;</button>
+                    <button class="deleteSourceBtn" onclick="deleteSource('${src.source_id}', event)" title="Delete source">&times;</button>
                 </div>
             </div>
         `;
@@ -480,19 +527,44 @@ async function toggleSource(sourceId, isChecked) {
         console.error("Failed to toggle source", e);
     }
 }
+window.toggleSource = toggleSource;
 
-async function deleteSource(sourceId) {
-    if (!confirm("Are you sure you want to delete this source? This will remove all associated customers and re-train the model.")) return;
+async function deleteSource(sourceId, event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    if (!confirm("Are you sure you want to delete this source? This will remove all associated customer records.")) return;
+
+    const safeId = window.CSS && CSS.escape ? CSS.escape(sourceId) : sourceId;
+    const sourceEl = document.querySelector(`.sourceItem[data-id="${safeId}"]`);
+    if (sourceEl) {
+        sourceEl.style.opacity = '0.3';
+        sourceEl.style.pointerEvents = 'none';
+    }
+
     try {
-        const res = await fetch(`/api/sources/${sourceId}`, { method: 'DELETE' });
+        const res = await fetch(`/api/sources/${encodeURIComponent(sourceId)}`, { method: 'DELETE' });
         if (res.ok) {
             await loadDashboard();
             await fetchSources();
+        } else {
+            alert("Failed to delete source. Please try again.");
+            if (sourceEl) {
+                sourceEl.style.opacity = '1';
+                sourceEl.style.pointerEvents = 'auto';
+            }
         }
     } catch (e) {
         console.error("Failed to delete source", e);
+        if (sourceEl) {
+            sourceEl.style.opacity = '1';
+            sourceEl.style.pointerEvents = 'auto';
+        }
     }
 }
+window.deleteSource = deleteSource;
+window.uploadFile = uploadFile;
 
 // 2. Notes Management
 async function fetchNotes() {
@@ -920,7 +992,7 @@ function renderSlides(slides) {
             contentHtml = `
                 <div class="slideContent layout-workflow">
                     <div class="slideHeader">
-                        <div class="presMiniLogo">Show AI</div>
+                        <div class="presMiniLogo">@ AI</div>
                         <span>Interactive Customer Journey Workflow</span>
                     </div>
                     <h2>${slide.title}</h2>
@@ -1404,7 +1476,7 @@ async function triggerQuickQA(question) {
     box.innerHTML = `<div class="qaLoading">Data Scientist processing metrics for presentation Q&A...</div>`;
 
     try {
-        const apiKey = localStorage.getItem('show_ai_model_key') || '';
+        const apiKey = localStorage.getItem('at_ai_model_key') || localStorage.getItem('show_ai_model_key') || '';
         const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
